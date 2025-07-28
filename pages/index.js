@@ -71,39 +71,94 @@ export default function ClintBusinessAssistant() {
     setInputMessage('');
     setIsLoading(true);
 
-    // Simple demo responses for now
-    setTimeout(() => {
-      const responses = [
-        "I'd be happy to help with that! Let me pull up the relevant information and get that processed for you right away.",
-        "Perfect! I can handle that task efficiently. Based on your request, I'll generate the appropriate documentation and have it ready for download.",
-        "Excellent choice! I'll search through your business data and customer information to find exactly what you need.",
-        "Great! I can automate that process for you. This will save you significant time on paperwork and administrative tasks."
-      ];
-      
-      setMessages(prev => [...prev, {
-        role: 'assistant',
-        content: responses[Math.floor(Math.random() * responses.length)],
-        timestamp: new Date()
-      }]);
+    try {
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 1500,
+      messages: [
+        { 
+          role: "user", 
+          content: `You are Clint's personal business assistant for AIP Best Rate Insurance in Shreveport, Louisiana.
 
-      // Auto-generate forms when requested
-      if (inputMessage.toLowerCase().includes('form') || inputMessage.toLowerCase().includes('application')) {
-        const formType = inputMessage.toLowerCase().includes('auto') ? 'Auto Insurance' : 
-                         inputMessage.toLowerCase().includes('home') ? 'Homeowners' : 'Insurance';
-        
-        const newForm = {
-          id: Date.now(),
-          name: `${formType} Application - ${new Date().toLocaleDateString()}`,
-          type: formType.toLowerCase().replace(' ', '_'),
-          date: new Date().toISOString().split('T')[0],
-          time: new Date().toLocaleTimeString(),
-          content: `${formType} Application Form\nGenerated for: AIP Best Rate\nDate: ${new Date().toLocaleDateString()}\nTime: ${new Date().toLocaleTimeString()}\n\nThis form has been automatically filled out and is ready for use.`
-        };
-        setGeneratedForms(prev => [...prev, newForm]);
-      }
+BUSINESS CONTEXT:
+- Company: AIP Best Rate Insurance Brokerage
+- Owner: Clint Johnson
+- Location: Shreveport, Louisiana
+- Monthly Policies: ${businessStats.monthlyPolicies}
+- Monthly Revenue: ${businessStats.monthlyRevenue}
+- Active Clients: ${businessStats.activeClients}
+- Pending Quotes: ${businessStats.pendingQuotes}
 
-      setIsLoading(false);
-    }, 1500);
+RECENT CUSTOMERS:
+${recentCustomers.map(c => `- ${c.name}: ${c.policy} (${c.status})`).join('\n')}
+
+TODAY'S TASKS:
+${todaysTasks.map(t => `- ${t.task} (${t.priority} priority, ${t.completed ? 'completed' : 'pending'})`).join('\n')}
+
+CAPABILITIES:
+- Help find customer information quickly
+- Generate and fill out insurance forms automatically  
+- Create business reports and analytics
+- Manage daily tasks and follow-ups
+- Process new leads and applications
+- Organize and search business documents
+
+PERSONALITY:
+- Professional but friendly
+- Efficient and business-focused
+- Proactive in suggesting improvements
+- Helps save Clint time on repetitive tasks
+
+Respond as Clint's knowledgeable business assistant who understands insurance operations and can help with practical daily tasks.` 
+        },
+        ...messages.slice(1).map(msg => ({
+          role: msg.role,
+          content: msg.content
+        })),
+        { role: "user", content: inputMessage }
+      ]
+    })
+  });
+
+  const data = await response.json();
+  const assistantMessage = {
+    role: 'assistant',
+    content: data.content[0].text,
+    timestamp: new Date()
+  };
+
+  setMessages(prev => [...prev, assistantMessage]);
+
+  // Auto-generate forms when requested
+  if (inputMessage.toLowerCase().includes('form') || inputMessage.toLowerCase().includes('application')) {
+    const formType = inputMessage.toLowerCase().includes('auto') ? 'Auto Insurance' : 
+                     inputMessage.toLowerCase().includes('home') ? 'Homeowners' : 'Insurance';
+    
+    const newForm = {
+      id: Date.now(),
+      name: `${formType} Application - ${new Date().toLocaleDateString()}`,
+      type: formType.toLowerCase().replace(' ', '_'),
+      date: new Date().toISOString().split('T')[0],
+      time: new Date().toLocaleTimeString(),
+      content: `${formType} Application Form\nGenerated for: AIP Best Rate\nDate: ${new Date().toLocaleDateString()}\nTime: ${new Date().toLocaleTimeString()}\n\n${assistantMessage.content}`
+    };
+    setGeneratedForms(prev => [...prev, newForm]);
+  }
+} catch (error) {
+  console.error('Error:', error);
+  setMessages(prev => [...prev, {
+    role: 'assistant',
+    content: 'I encountered a technical issue. Please try again, or if this persists, let me know and I\'ll help troubleshoot.',
+    timestamp: new Date()
+  }]);
+} finally {
+  setIsLoading(false);
+}
   };
 
   const handleKeyPress = (e) => {
