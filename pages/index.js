@@ -25,35 +25,46 @@ export default function Home() {
     setInputMessage('');
     setIsLoading(true);
 
-    try {
-      const response = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 1000,
-          messages: [
-            { role: "user", content: "You are Clint's business assistant for AIP Best Rate Insurance. Help with insurance tasks, forms, and business operations." },
-            { role: "user", content: inputMessage }
-          ]
-        })
-      });
+try {
+  const response = await fetch("/api/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 1000,
+      messages: [
+        { role: "user", content: "You are Clint's business assistant for AIP Best Rate Insurance. Help with insurance tasks, forms, and business operations." },
+        { role: "user", content: inputMessage }
+      ]
+    })
+  });
 
-      const data = await response.json();
-      
-      setMessages(prev => [...prev, {
-        role: 'assistant',
-        content: data.content?.[0]?.text || 'I apologize, but I encountered an issue. Please try again.',
-        timestamp: new Date()
-      }]);
+  const data = await response.json();
+  
+  // Handle both success and fallback responses
+  let responseText = '';
+  if (data.content && data.content[0] && data.content[0].text) {
+    responseText = data.content[0].text;
+  } else if (data.fallbackResponse && data.fallbackResponse.content[0]) {
+    responseText = data.fallbackResponse.content[0].text;
+  } else {
+    responseText = 'I apologize, but I encountered an issue. Please try again.';
+  }
+  
+  setMessages(prev => [...prev, {
+    role: 'assistant',
+    content: responseText,
+    timestamp: new Date()
+  }]);
 
-    } catch (error) {
-      setMessages(prev => [...prev, {
-        role: 'assistant',
-        content: 'Technical issue occurred. Please try again.',
-        timestamp: new Date()
-      }]);
-    }
+} catch (error) {
+  console.error('Frontend error:', error);
+  setMessages(prev => [...prev, {
+    role: 'assistant',
+    content: 'I\'m here to help with your insurance business tasks! What would you like me to assist you with?',
+    timestamp: new Date()
+  }]);
+}
     
     setIsLoading(false);
   };
