@@ -11,47 +11,35 @@ export default function ClintBusinessAssistant() {
   
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [businessFiles, setBusinessFiles] = useState([
-    { id: 1, name: 'Q3_Sales_Report.pdf', type: 'report', size: '245 KB', date: '2025-07-20' },
-    { id: 2, name: 'Customer_Database.xlsx', type: 'database', size: '1.2 MB', date: '2025-07-19' },
-    { id: 3, name: 'Insurance_Forms_Template.pdf', type: 'template', size: '890 KB', date: '2025-07-18' }
-  ]);
-  const [generatedForms, setGeneratedForms] = useState([]);
-  const [todaysTasks, setTodaysTasks] = useState([
-    { id: 1, task: 'Follow up with Johnson family - auto quote', priority: 'high', completed: false },
-    { id: 2, task: 'Process Smith homeowners application', priority: 'medium', completed: false },
-    { id: 3, task: 'Review Q3 sales numbers', priority: 'low', completed: true }
-  ]);
-  
   const messagesEndRef = useRef(null);
-  const fileInputRef = useRef(null);
 
   const businessStats = {
     monthlyPolicies: 47,
     monthlyRevenue: '$23,500',
     activeClients: 342,
-    pendingQuotes: 12,
-    thisWeekAppointments: 8
+    pendingQuotes: 12
   };
 
   const quickActions = [
-    { id: 1, title: 'Generate Auto Insurance Form', icon: '🚗', action: 'generate_auto_form' },
-    { id: 2, title: 'Find Customer Info', icon: '👤', action: 'find_customer' },
-    { id: 3, title: 'Create Weekly Report', icon: '📊', action: 'weekly_report' },
-    { id: 4, title: 'Schedule Follow-up', icon: '📅', action: 'schedule_followup' },
-    { id: 5, title: 'Process New Lead', icon: '⭐', action: 'process_lead' },
-    { id: 6, title: 'Upload Documents', icon: '📁', action: 'upload_docs' }
+    'Generate Auto Insurance Form',
+    'Find Customer Info',
+    'Create Weekly Report',
+    'Schedule Follow-up',
+    'Process New Lead',
+    'Upload Documents'
   ];
 
   const recentCustomers = [
-    { name: 'John Smith', policy: 'Auto + Home', lastContact: '2025-07-19', status: 'Active' },
-    { name: 'Sarah Johnson', policy: 'Auto', lastContact: '2025-07-18', status: 'Quote Pending' },
-    { name: 'Mike Davis', policy: 'Commercial', lastContact: '2025-07-17', status: 'Active' },
-    { name: 'Lisa Wilson', policy: 'Home', lastContact: '2025-07-16', status: 'Renewal Due' }
+    { name: 'John Smith', policy: 'Auto + Home', status: 'Active' },
+    { name: 'Sarah Johnson', policy: 'Auto', status: 'Quote Pending' },
+    { name: 'Mike Davis', policy: 'Commercial', status: 'Active' },
+    { name: 'Lisa Wilson', policy: 'Home', status: 'Renewal Due' }
   ];
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
   };
 
   useEffect(() => {
@@ -72,18 +60,18 @@ export default function ClintBusinessAssistant() {
     setIsLoading(true);
 
     try {
- const response = await fetch("/api/chat", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 1500,
-      messages: [
-        { 
-          role: "user", 
-          content: `You are Clint's personal business assistant for AIP Best Rate Insurance in Shreveport, Louisiana.
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 1500,
+          messages: [
+            { 
+              role: "user", 
+              content: `You are Clint's personal business assistant for AIP Best Rate Insurance in Shreveport, Louisiana.
 
 BUSINESS CONTEXT:
 - Company: AIP Best Rate Insurance Brokerage
@@ -92,13 +80,9 @@ BUSINESS CONTEXT:
 - Monthly Policies: ${businessStats.monthlyPolicies}
 - Monthly Revenue: ${businessStats.monthlyRevenue}
 - Active Clients: ${businessStats.activeClients}
-- Pending Quotes: ${businessStats.pendingQuotes}
 
 RECENT CUSTOMERS:
 ${recentCustomers.map(c => `- ${c.name}: ${c.policy} (${c.status})`).join('\n')}
-
-TODAY'S TASKS:
-${todaysTasks.map(t => `- ${t.task} (${t.priority} priority, ${t.completed ? 'completed' : 'pending'})`).join('\n')}
 
 CAPABILITIES:
 - Help find customer information quickly
@@ -108,57 +92,40 @@ CAPABILITIES:
 - Process new leads and applications
 - Organize and search business documents
 
-PERSONALITY:
-- Professional but friendly
-- Efficient and business-focused
-- Proactive in suggesting improvements
-- Helps save Clint time on repetitive tasks
-
 Respond as Clint's knowledgeable business assistant who understands insurance operations and can help with practical daily tasks.` 
-        },
-        ...messages.slice(1).map(msg => ({
-          role: msg.role,
-          content: msg.content
-        })),
-        { role: "user", content: inputMessage }
-      ]
-    })
-  });
+            },
+            ...messages.slice(1).map(msg => ({
+              role: msg.role,
+              content: msg.content
+            })),
+            { role: "user", content: inputMessage }
+          ]
+        })
+      });
 
-  const data = await response.json();
-  const assistantMessage = {
-    role: 'assistant',
-    content: data.content[0].text,
-    timestamp: new Date()
-  };
+      const data = await response.json();
+      
+      if (data.content && data.content[0]) {
+        const assistantMessage = {
+          role: 'assistant',
+          content: data.content[0].text,
+          timestamp: new Date()
+        };
+        setMessages(prev => [...prev, assistantMessage]);
+      } else {
+        throw new Error('Invalid response format');
+      }
 
-  setMessages(prev => [...prev, assistantMessage]);
-
-  // Auto-generate forms when requested
-  if (inputMessage.toLowerCase().includes('form') || inputMessage.toLowerCase().includes('application')) {
-    const formType = inputMessage.toLowerCase().includes('auto') ? 'Auto Insurance' : 
-                     inputMessage.toLowerCase().includes('home') ? 'Homeowners' : 'Insurance';
-    
-    const newForm = {
-      id: Date.now(),
-      name: `${formType} Application - ${new Date().toLocaleDateString()}`,
-      type: formType.toLowerCase().replace(' ', '_'),
-      date: new Date().toISOString().split('T')[0],
-      time: new Date().toLocaleTimeString(),
-      content: `${formType} Application Form\nGenerated for: AIP Best Rate\nDate: ${new Date().toLocaleDateString()}\nTime: ${new Date().toLocaleTimeString()}\n\n${assistantMessage.content}`
-    };
-    setGeneratedForms(prev => [...prev, newForm]);
-  }
-} catch (error) {
-  console.error('Error:', error);
-  setMessages(prev => [...prev, {
-    role: 'assistant',
-    content: 'I encountered a technical issue. Please try again, or if this persists, let me know and I\'ll help troubleshoot.',
-    timestamp: new Date()
-  }]);
-} finally {
-  setIsLoading(false);
-}
+    } catch (error) {
+      console.error('Error:', error);
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: 'I encountered a technical issue. Please try again, or if this persists, let me know and I\'ll help troubleshoot.',
+        timestamp: new Date()
+      }]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleKeyPress = (e) => {
@@ -166,56 +133,6 @@ Respond as Clint's knowledgeable business assistant who understands insurance op
       e.preventDefault();
       handleSendMessage();
     }
-  };
-
-  const handleQuickAction = (action) => {
-    const actionMap = {
-      'generate_auto_form': 'Generate a new auto insurance application form for a customer',
-      'find_customer': 'Find information for customer John Smith',
-      'weekly_report': 'Create this week\'s sales and performance report',
-      'schedule_followup': 'Schedule a follow-up with pending quote customers',
-      'process_lead': 'Help me process a new insurance lead',
-      'upload_docs': 'I need to upload and organize business documents'
-    };
-    
-    setInputMessage(actionMap[action] || action);
-  };
-
-  const handleFileUpload = async (event) => {
-    const files = Array.from(event.target.files);
-    
-    for (const file of files) {
-      const newFile = {
-        id: Date.now() + Math.random(),
-        name: file.name,
-        type: file.type.includes('pdf') ? 'document' : file.type.includes('excel') ? 'spreadsheet' : 'file',
-        size: `${(file.size / 1024).toFixed(1)} KB`,
-        date: new Date().toISOString().split('T')[0]
-      };
-      setBusinessFiles(prev => [...prev, newFile]);
-    }
-    
-    setMessages(prev => [...prev, {
-      role: 'assistant',
-      content: `I've successfully uploaded ${files.length} file(s) to your business documents. They're now searchable and I can help you work with the content.`,
-      timestamp: new Date()
-    }]);
-  };
-
-  const downloadForm = (form) => {
-    const element = document.createElement('a');
-    const file = new Blob([form.content], { type: 'text/plain' });
-    element.href = URL.createObjectURL(file);
-    element.download = `${form.name.replace(/[^a-z0-9]/gi, '_')}.txt`;
-    document.body.appendChild(element);
-    element.click();
-    document.body.removeChild(element);
-  };
-
-  const toggleTask = (taskId) => {
-    setTodaysTasks(prev => prev.map(task => 
-      task.id === taskId ? { ...task, completed: !task.completed } : task
-    ));
   };
 
   return (
@@ -261,8 +178,6 @@ Respond as Clint's knowledgeable business assistant who understands insurance op
         
         {/* Left Sidebar */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          
-          {/* Quick Actions */}
           <div style={{ 
             background: 'white', 
             borderRadius: '16px', 
@@ -271,72 +186,24 @@ Respond as Clint's knowledgeable business assistant who understands insurance op
           }}>
             <h3 style={{ margin: '0 0 20px 0', fontSize: '18px', fontWeight: '600', color: '#1f2937' }}>Quick Actions</h3>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              {quickActions.map((action) => (
+              {quickActions.map((action, index) => (
                 <button
-                  key={action.id}
-                  onClick={() => handleQuickAction(action.action)}
+                  key={index}
+                  onClick={() => setInputMessage(action)}
                   style={{ 
                     padding: '15px 12px',
                     background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
                     border: '1px solid #e2e8f0',
                     borderRadius: '12px',
                     cursor: 'pointer',
-                    transition: 'all 0.2s',
                     textAlign: 'center',
                     fontSize: '11px',
                     fontWeight: '500',
                     color: '#374151'
                   }}
                 >
-                  <div style={{ fontSize: '20px', marginBottom: '8px' }}>{action.icon}</div>
-                  {action.title}
+                  {action}
                 </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Today's Tasks */}
-          <div style={{ 
-            background: 'white', 
-            borderRadius: '16px', 
-            padding: '20px', 
-            boxShadow: '0 4px 20px rgba(0,0,0,0.08)'
-          }}>
-            <h3 style={{ margin: '0 0 20px 0', fontSize: '18px', fontWeight: '600', color: '#1f2937' }}>Today's Tasks</h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {todaysTasks.map((task) => (
-                <div key={task.id} style={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  gap: '12px',
-                  padding: '12px',
-                  background: task.completed ? '#f0fdf4' : '#fefefe',
-                  borderRadius: '8px',
-                  border: `1px solid ${task.completed ? '#bbf7d0' : '#f3f4f6'}`
-                }}>
-                  <input
-                    type="checkbox"
-                    checked={task.completed}
-                    onChange={() => toggleTask(task.id)}
-                    style={{ width: '16px', height: '16px' }}
-                  />
-                  <div style={{ flex: 1 }}>
-                    <div style={{ 
-                      fontSize: '13px', 
-                      color: task.completed ? '#6b7280' : '#374151',
-                      textDecoration: task.completed ? 'line-through' : 'none'
-                    }}>
-                      {task.task}
-                    </div>
-                    <div style={{ 
-                      fontSize: '11px', 
-                      color: task.priority === 'high' ? '#dc2626' : task.priority === 'medium' ? '#f59e0b' : '#10b981',
-                      fontWeight: '500'
-                    }}>
-                      {task.priority} priority
-                    </div>
-                  </div>
-                </div>
               ))}
             </div>
           </div>
@@ -356,8 +223,7 @@ Respond as Clint's knowledgeable business assistant who understands insurance op
           <div style={{ 
             background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', 
             color: 'white', 
-            padding: '20px',
-            borderBottom: '1px solid rgba(255,255,255,0.2)'
+            padding: '20px'
           }}>
             <h2 style={{ margin: '0', fontSize: '20px', fontWeight: '600' }}>AI Business Assistant</h2>
             <p style={{ margin: '5px 0 0 0', fontSize: '14px', opacity: 0.9 }}>
@@ -384,42 +250,21 @@ Respond as Clint's knowledgeable business assistant who understands insurance op
               >
                 <div style={{ 
                   maxWidth: '75%',
-                  display: 'flex',
-                  gap: '12px',
-                  flexDirection: message.role === 'user' ? 'row-reverse' : 'row'
+                  padding: '16px 20px',
+                  borderRadius: '16px',
+                  background: message.role === 'user' ? '#667eea' : 'white',
+                  color: message.role === 'user' ? 'white' : '#374151',
+                  boxShadow: message.role === 'assistant' ? '0 2px 10px rgba(0,0,0,0.1)' : 'none',
+                  fontSize: '14px',
+                  lineHeight: '1.5'
                 }}>
+                  <div style={{ whiteSpace: 'pre-wrap' }}>{message.content}</div>
                   <div style={{ 
-                    width: '36px',
-                    height: '36px',
-                    borderRadius: '50%',
-                    background: message.role === 'user' ? '#667eea' : '#f1f5f9',
-                    color: message.role === 'user' ? 'white' : '#374151',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '16px',
-                    flexShrink: 0
+                    fontSize: '11px', 
+                    marginTop: '8px',
+                    opacity: 0.7
                   }}>
-                    {message.role === 'user' ? '👤' : '🤖'}
-                  </div>
-                  
-                  <div style={{ 
-                    padding: '16px 20px',
-                    borderRadius: '16px',
-                    background: message.role === 'user' ? '#667eea' : 'white',
-                    color: message.role === 'user' ? 'white' : '#374151',
-                    boxShadow: message.role === 'assistant' ? '0 2px 10px rgba(0,0,0,0.1)' : 'none',
-                    fontSize: '14px',
-                    lineHeight: '1.5'
-                  }}>
-                    <div style={{ whiteSpace: 'pre-wrap' }}>{message.content}</div>
-                    <div style={{ 
-                      fontSize: '11px', 
-                      marginTop: '8px',
-                      opacity: 0.7
-                    }}>
-                      {message.timestamp.toLocaleTimeString()}
-                    </div>
+                    {message.timestamp.toLocaleTimeString()}
                   </div>
                 </div>
               </div>
@@ -427,32 +272,13 @@ Respond as Clint's knowledgeable business assistant who understands insurance op
             
             {isLoading && (
               <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: '20px' }}>
-                <div style={{ display: 'flex', gap: '12px' }}>
-                  <div style={{ 
-                    width: '36px',
-                    height: '36px',
-                    borderRadius: '50%',
-                    background: '#f1f5f9',
-                    color: '#374151',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '16px'
-                  }}>
-                    🤖
-                  </div>
-                  <div style={{ 
-                    padding: '16px 20px',
-                    borderRadius: '16px',
-                    background: 'white',
-                    boxShadow: '0 2px 10px rgba(0,0,0,0.1)'
-                  }}>
-                    <div style={{ display: 'flex', gap: '4px' }}>
-                      <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#667eea' }}></div>
-                      <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#667eea' }}></div>
-                      <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#667eea' }}></div>
-                    </div>
-                  </div>
+                <div style={{ 
+                  padding: '16px 20px',
+                  borderRadius: '16px',
+                  background: 'white',
+                  boxShadow: '0 2px 10px rgba(0,0,0,0.1)'
+                }}>
+                  <div>AI is thinking...</div>
                 </div>
               </div>
             )}
@@ -463,29 +289,6 @@ Respond as Clint's knowledgeable business assistant who understands insurance op
           {/* Input Area */}
           <div style={{ padding: '20px', borderTop: '1px solid #f1f5f9' }}>
             <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end' }}>
-              <input
-                type="file"
-                ref={fileInputRef}
-                onChange={handleFileUpload}
-                multiple
-                style={{ display: 'none' }}
-              />
-              
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                style={{ 
-                  padding: '12px',
-                  background: '#f8fafc',
-                  border: '1px solid #e2e8f0',
-                  borderRadius: '12px',
-                  cursor: 'pointer',
-                  fontSize: '18px'
-                }}
-                title="Upload files"
-              >
-                📎
-              </button>
-              
               <textarea
                 value={inputMessage}
                 onChange={(e) => setInputMessage(e.target.value)}
@@ -528,8 +331,6 @@ Respond as Clint's knowledgeable business assistant who understands insurance op
 
         {/* Right Sidebar */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          
-          {/* Recent Customers */}
           <div style={{ 
             background: 'white', 
             borderRadius: '16px', 
@@ -562,76 +363,6 @@ Respond as Clint's knowledgeable business assistant who understands insurance op
               ))}
             </div>
           </div>
-
-          {/* Business Files */}
-          <div style={{ 
-            background: 'white', 
-            borderRadius: '16px', 
-            padding: '20px', 
-            boxShadow: '0 4px 20px rgba(0,0,0,0.08)'
-          }}>
-            <h3 style={{ margin: '0 0 20px 0', fontSize: '18px', fontWeight: '600', color: '#1f2937' }}>Business Files</h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {businessFiles.slice(0, 5).map((file) => (
-                <div key={file.id} style={{ 
-                  padding: '10px',
-                  background: '#fafbfc',
-                  borderRadius: '6px',
-                  border: '1px solid #f1f5f9'
-                }}>
-                  <div style={{ fontSize: '13px', fontWeight: '500', color: '#1f2937', marginBottom: '2px' }}>
-                    📄 {file.name}
-                  </div>
-                  <div style={{ fontSize: '11px', color: '#6b7280' }}>
-                    {file.size} • {file.date}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Generated Forms */}
-          {generatedForms.length > 0 && (
-            <div style={{ 
-              background: 'white', 
-              borderRadius: '16px', 
-              padding: '20px', 
-              boxShadow: '0 4px 20px rgba(0,0,0,0.08)'
-            }}>
-              <h3 style={{ margin: '0 0 20px 0', fontSize: '18px', fontWeight: '600', color: '#1f2937' }}>Generated Forms</h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {generatedForms.slice(-3).map((form) => (
-                  <div key={form.id} style={{ 
-                    padding: '10px',
-                    background: '#f0fdf4',
-                    borderRadius: '6px',
-                    border: '1px solid #bbf7d0'
-                  }}>
-                    <div style={{ fontSize: '13px', fontWeight: '500', color: '#1f2937', marginBottom: '2px' }}>
-                      📋 {form.name}
-                    </div>
-                    <div style={{ fontSize: '11px', color: '#6b7280', marginBottom: '6px' }}>
-                      {form.date} • {form.time}
-                    </div>
-                    <button
-                      onClick={() => downloadForm(form)}
-                      style={{ 
-                        fontSize: '11px',
-                        padding: '4px 8px',
-                        background: '#059669',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      Download
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
       </div>
     </div>
