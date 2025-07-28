@@ -6,36 +6,44 @@ export default async function handler(req, res) {
   try {
     console.log('Incoming request:', JSON.stringify(req.body, null, 2));
 
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "anthropic-version": "2023-06-01",
-        "x-api-key": process.env.ANTHROPIC_API_KEY || "sk-ant-api03-placeholder-key-here"
+        "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`
       },
-      body: JSON.stringify(req.body)
+      body: JSON.stringify({
+        model: "gpt-4",
+        messages: req.body.messages || [
+          {
+            role: "system",
+            content: "You are Clint's professional business assistant for AIP Best Rate insurance company. Help with insurance forms, customer management, and daily business tasks. Be helpful, professional, and knowledgeable about insurance processes."
+          },
+          {
+            role: "user", 
+            content: req.body.message || "Hello"
+          }
+        ],
+        max_tokens: 500,
+        temperature: 0.7
+      })
     });
 
-    console.log('Claude API response status:', response.status);
-    console.log('Claude API response headers:', Object.fromEntries(response.headers.entries()));
+    console.log('OpenAI API response status:', response.status);
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('Claude API error response:', errorText);
+      console.error('OpenAI API error:', errorText);
       
       return res.status(response.status).json({ 
-        error: 'Claude API failed',
+        error: 'OpenAI API failed',
         status: response.status,
-        details: errorText,
-        debug: {
-          requestBody: req.body,
-          headers: response.headers
-        }
+        details: errorText
       });
     }
 
     const data = await response.json();
-    console.log('Claude API success response:', JSON.stringify(data, null, 2));
+    console.log('OpenAI API success!');
     
     return res.status(200).json(data);
 
@@ -43,8 +51,7 @@ export default async function handler(req, res) {
     console.error('Server error:', error);
     return res.status(500).json({ 
       error: 'Server error',
-      message: error.message,
-      stack: error.stack
+      message: error.message
     });
   }
 }
