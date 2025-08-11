@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import Papa from 'papaparse';
+import { supabase } from '../lib/supabase';
 
 export default function Home() {
   const [messages, setMessages] = useState([
@@ -11,6 +13,78 @@ export default function Home() {
   
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState('');
+
+  // CSV Upload Functions
+  const handleFileUpload = async (file) => {
+    if (!file || !file.name.endsWith('.csv')) {
+      setUploadStatus('Please upload a CSV file');
+      return;
+    }
+
+    setIsUploading(true);
+    setUploadStatus('Processing CSV file...');
+
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: async (results) => {
+        try {
+          const customers = results.data.map(row => ({
+            name: row.name || row.Name || '',
+            email: row.email || row.Email || '',
+            phone: row.phone || row.Phone || '',
+            address: row.address || row.Address || '',
+            policy_number: row.policy_number || row['Policy Number'] || '',
+            coverage_type: row.coverage_type || row['Coverage Type'] || '',
+            premium: row.premium || row.Premium || null,
+            status: row.status || row.Status || 'Active',
+            notes: row.notes || row.Notes || ''
+          }));
+
+          const { data, error } = await supabase
+            .from('customers')
+            .insert(customers);
+
+          if (error) {
+            throw error;
+          }
+
+          setUploadStatus(`Successfully uploaded ${customers.length} customers!`);
+          setTimeout(() => setUploadStatus(''), 3000);
+        } catch (error) {
+          console.error('Upload error:', error);
+          setUploadStatus(`Upload failed: ${error.message}`);
+        }
+        setIsUploading(false);
+      },
+      error: (error) => {
+        console.error('CSV parsing error:', error);
+        setUploadStatus('Failed to parse CSV file');
+        setIsUploading(false);
+      }
+    });
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+      handleFileUpload(files[0]);
+    }
+  };
+
+  const handleFileSelect = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      handleFileUpload(file);
+    }
+  };
 
   const handleSendMessage = async () => {
     if (!inputMessage.trim() || isLoading) return;
@@ -132,52 +206,122 @@ export default function Home() {
 
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '2rem', display: 'grid', gridTemplateColumns: '300px 1fr', gap: '2rem' }}>
         
-        {/* Quick Actions Sidebar */}
+        {/* Sidebar with CSV Upload */}
         <div style={{
-          backgroundColor: 'white',
-          borderRadius: '8px',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-          padding: '1.5rem',
-          height: 'fit-content'
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '1.5rem'
         }}>
-          <h3 style={{ margin: '0 0 1rem 0', color: '#374151', fontSize: '1.1rem', fontWeight: '600' }}>Quick Actions</h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            {quickActions.map((item, index) => (
-              <button
-                key={index}
-                onClick={() => handleQuickAction(item.action)}
-                style={{
-                  padding: '0.75rem',
-                  backgroundColor: '#f3f4f6',
-                  border: '1px solid #e5e7eb',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                  fontSize: '0.85rem',
-                  color: '#374151',
-                  transition: 'all 0.2s',
-                  fontFamily: 'inherit'
-                }}
-                onMouseOver={(e) => {
-                  e.target.style.backgroundColor = '#e5e7eb';
-                  e.target.style.borderColor = '#1e40af';
-                }}
-                onMouseOut={(e) => {
-                  e.target.style.backgroundColor = '#f3f4f6';
-                  e.target.style.borderColor = '#e5e7eb';
-                }}
-              >
-                {item.label}
-              </button>
-            ))}
+          
+          {/* CSV Upload Section */}
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '8px',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+            padding: '1.5rem'
+          }}>
+            <h3 style={{ margin: '0 0 1rem 0', color: '#374151', fontSize: '1.1rem', fontWeight: '600' }}>Customer Data Upload</h3>
+            
+            <div 
+              style={{
+                border: '2px dashed #d1d5db',
+                borderRadius: '8px',
+                padding: '2rem',
+                textAlign: 'center',
+                backgroundColor: isUploading ? '#f9fafb' : '#fafafa',
+                cursor: isUploading ? 'not-allowed' : 'pointer',
+                transition: 'all 0.2s'
+              }}
+              onDragOver={handleDragOver}
+              onDrop={handleDrop}
+              onClick={() => !isUploading && document.getElementById('csvFile').click()}
+            >
+              <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>📄</div>
+              <div style={{ fontSize: '0.9rem', color: '#6b7280', marginBottom: '0.5rem' }}>
+                {isUploading ? 'Processing...' : 'Drag & drop CSV file here'}
+              </div>
+              <div style={{ fontSize: '0.8rem', color: '#9ca3af' }}>
+                or click to browse
+              </div>
+              <input
+                id="csvFile"
+                type="file"
+                accept=".csv"
+                style={{ display: 'none' }}
+                onChange={handleFileSelect}
+                disabled={isUploading}
+              />
+            </div>
+            
+            {uploadStatus && (
+              <div style={{
+                marginTop: '1rem',
+                padding: '0.75rem',
+                borderRadius: '6px',
+                fontSize: '0.85rem',
+                backgroundColor: uploadStatus.includes('Success') ? '#dcfce7' : uploadStatus.includes('failed') ? '#fef2f2' : '#fef3c7',
+                color: uploadStatus.includes('Success') ? '#166534' : uploadStatus.includes('failed') ? '#dc2626' : '#d97706',
+                border: `1px solid ${uploadStatus.includes('Success') ? '#bbf7d0' : uploadStatus.includes('failed') ? '#fecaca' : '#fed7aa'}`
+              }}>
+                {uploadStatus}
+              </div>
+            )}
+          </div>
+
+          {/* Quick Actions */}
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '8px',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+            padding: '1.5rem'
+          }}>
+            <h3 style={{ margin: '0 0 1rem 0', color: '#374151', fontSize: '1.1rem', fontWeight: '600' }}>Quick Actions</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              {quickActions.map((item, index) => (
+                <button
+                  key={index}
+                  onClick={() => handleQuickAction(item.action)}
+                  style={{
+                    padding: '0.75rem',
+                    backgroundColor: '#f3f4f6',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    fontSize: '0.85rem',
+                    color: '#374151',
+                    transition: 'all 0.2s',
+                    fontFamily: 'inherit'
+                  }}
+                  onMouseOver={(e) => {
+                    e.target.style.backgroundColor = '#e5e7eb';
+                    e.target.style.borderColor = '#1e40af';
+                  }}
+                  onMouseOut={(e) => {
+                    e.target.style.backgroundColor = '#f3f4f6';
+                    e.target.style.borderColor = '#e5e7eb';
+                  }}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
           </div>
           
-          <div style={{ marginTop: '2rem', padding: '1rem', backgroundColor: '#f0f9ff', borderRadius: '6px', border: '1px solid #bae6fd' }}>
-            <h4 style={{ margin: '0 0 0.5rem 0', color: '#0369a1', fontSize: '0.9rem' }}>System Status</h4>
-            <div style={{ fontSize: '0.8rem', color: '#0369a1' }}>
-              <div>✅ All Systems Operational</div>
-              <div>✅ Customer Database Online</div>
-              <div>✅ Policy Management Active</div>
+          {/* System Status */}
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '8px',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+            padding: '1.5rem'
+          }}>
+            <div style={{ padding: '1rem', backgroundColor: '#f0f9ff', borderRadius: '6px', border: '1px solid #bae6fd' }}>
+              <h4 style={{ margin: '0 0 0.5rem 0', color: '#0369a1', fontSize: '0.9rem' }}>System Status</h4>
+              <div style={{ fontSize: '0.8rem', color: '#0369a1' }}>
+                <div>✅ All Systems Operational</div>
+                <div>✅ Database Connected</div>
+                <div>✅ CSV Upload Ready</div>
+              </div>
             </div>
           </div>
         </div>
@@ -308,7 +452,7 @@ export default function Home() {
                 value={inputMessage}
                 onChange={(e) => setInputMessage(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-                placeholder="Type your message here... (e.g., 'Generate auto insurance form', 'Find customer John Smith')"
+                placeholder="Type your message here... (e.g., 'Find customer John Smith', 'Generate auto insurance form')"
                 style={{
                   flex: 1,
                   padding: '0.75rem 1rem',
