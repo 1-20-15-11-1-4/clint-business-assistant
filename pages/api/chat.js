@@ -14,15 +14,15 @@ export default async function handler(req, res) {
     const userMessage = req.body.messages?.[1]?.content || req.body.message || "";
     const lowerMessage = userMessage.toLowerCase();
     
-    let response = "";
+    let context = "";
+    let customerData = [];
     
-    // Customer lookup functionality
+    // Check if user is asking about customers
     if (lowerMessage.includes('find') || lowerMessage.includes('search') || lowerMessage.includes('lookup') || lowerMessage.includes('customer')) {
       // Extract potential customer name
       const words = userMessage.split(' ');
       let searchTerm = '';
       
-      // Look for names after "find", "search", "lookup"
       for (let i = 0; i < words.length; i++) {
         if (['find', 'search', 'lookup'].includes(words[i].toLowerCase()) && words[i + 1]) {
           searchTerm = words.slice(i + 1).join(' ').replace(/[^\w\s]/gi, '');
@@ -31,7 +31,6 @@ export default async function handler(req, res) {
       }
       
       if (!searchTerm && lowerMessage.includes('customer')) {
-        // Try to extract any name-like words
         searchTerm = words.find(word => 
           word.length > 2 && 
           word[0] === word[0].toUpperCase() && 
@@ -45,137 +44,123 @@ export default async function handler(req, res) {
             .from('customers')
             .select('*')
             .ilike('name', `%${searchTerm}%`)
-            .limit(5);
+            .limit(10);
           
-          if (error) throw error;
-          
-          if (customers && customers.length > 0) {
-            response = `Found ${customers.length} customer(s) matching "${searchTerm}":\n\n`;
-            customers.forEach((customer, index) => {
-              response += `**${index + 1}. ${customer.name}**\n`;
-              response += `• Policy #: ${customer.policy_number || 'N/A'}\n`;
-              response += `• Phone: ${customer.phone || 'N/A'}\n`;
-              response += `• Email: ${customer.email || 'N/A'}\n`;
-              response += `• Coverage: ${customer.coverage_type || 'N/A'}\n`;
-              response += `• Premium: $${customer.premium || 'N/A'}\n`;
-              response += `• Status: ${customer.status || 'N/A'}\n`;
-              if (customer.notes) response += `• Notes: ${customer.notes}\n`;
-              response += '\n';
-            });
-          } else {
-            response = `No customers found matching "${searchTerm}". Please check the spelling or try a different search term.`;
+          if (!error && customers && customers.length > 0) {
+            customerData = customers;
+            context = `CUSTOMER DATABASE SEARCH RESULTS for "${searchTerm}":\n${customers.map(c => 
+              `- ${c.name}: Policy ${c.policy_number}, ${c.coverage_type}, $${c.premium}, Status: ${c.status}, Phone: ${c.phone}, Email: ${c.email}`
+            ).join('\n')}\n\n`;
           }
         } catch (dbError) {
           console.error('Database error:', dbError);
-          response = "I'm having trouble accessing the customer database right now. Please try again in a moment.";
         }
-      } else {
-        response = "Please specify a customer name to search for. For example: 'Find customer John Smith' or 'Search for Jane'.";
       }
     }
     
-    // Form generation with customer data
-    else if (lowerMessage.includes('form') || lowerMessage.includes('application')) {
-      const isAuto = lowerMessage.includes('auto') || lowerMessage.includes('car') || lowerMessage.includes('vehicle');
-      
-      // Check if customer name is mentioned
-      const words = userMessage.split(' ');
-      let customerName = '';
-      for (let i = 0; i < words.length; i++) {
-        if (words[i].length > 2 && words[i][0] === words[i][0].toUpperCase()) {
-          customerName = words[i];
-          if (words[i + 1] && words[i + 1][0] === words[i + 1][0].toUpperCase()) {
-            customerName += ' ' + words[i + 1];
-          }
-          break;
-        }
-      }
-      
-      if (customerName) {
-        try {
-          const { data: customers, error } = await supabase
-            .from('customers')
-            .select('*')
-            .ilike('name', `%${customerName}%`)
-            .limit(1);
-          
-          if (customers && customers.length > 0) {
-            const customer = customers[0];
-            response = isAuto ? 
-              `**AUTO INSURANCE APPLICATION FORM**\n\nCustomer Information:\n• Name: ${customer.name}\n• Phone: ${customer.phone || '___________'}\n• Email: ${customer.email || '___________'}\n• Address: ${customer.address || '___________'}\n\nVehicle Information:\n• Year/Make/Model: ___________\n• VIN: ___________\n• Current Mileage: ___________\n\nCoverage Options:\n☐ Liability Coverage\n☐ Collision Coverage\n☐ Comprehensive Coverage\n☐ Uninsured Motorist Protection\n\nForm pre-filled with customer data from our records.` :
-              `**INSURANCE APPLICATION FORM**\n\nCustomer Information:\n• Name: ${customer.name}\n• Phone: ${customer.phone || '___________'}\n• Email: ${customer.email || '___________'}\n• Address: ${customer.address || '___________'}\n• Current Policy: ${customer.policy_number || 'New Customer'}\n\nForm ready for completion.`;
-          } else {
-            response = `Customer "${customerName}" not found in database. Would you like me to create a blank form or search for a different customer?`;
-          }
-        } catch (dbError) {
-          response = "I'm having trouble accessing customer data. I'll create a blank form instead.\n\n" + 
-            (isAuto ? "**AUTO INSURANCE APPLICATION FORM**\n\nCustomer Information:\n• Name: ___________\n• Date of Birth: ___________\n• Driver's License #: ___________" : "**INSURANCE APPLICATION FORM**\n\nCustomer Information:\n• Name: ___________\n• Phone: ___________\n• Email: ___________");
-        }
-      } else {
-        response = isAuto ? 
-          "**AUTO INSURANCE APPLICATION FORM**\n\nCustomer Information:\n• Name: ___________\n• Date of Birth: ___________\n• Driver's License #: ___________\n• Phone: ___________\n• Email: ___________\n\nVehicle Information:\n• Year/Make/Model: ___________\n• VIN: ___________\n• Current Mileage: ___________\n\nTo auto-fill with customer data, specify a name like 'Generate auto form for John Smith'." :
-          "I can help generate various insurance forms. Specify the type and customer name for auto-completion, like 'Generate auto insurance form for John Smith'.";
-      }
-    }
-    
-    // Report generation with real data
-    else if (lowerMessage.includes('report') || lowerMessage.includes('summary') || lowerMessage.includes('analysis')) {
+    // Check if user wants a report
+    if (lowerMessage.includes('report') || lowerMessage.includes('summary') || lowerMessage.includes('analysis')) {
       try {
-        const { data: customers, error } = await supabase
+        const { data: allCustomers, error } = await supabase
           .from('customers')
           .select('*');
         
-        if (error) throw error;
-        
-        const totalCustomers = customers.length;
-        const activeCustomers = customers.filter(c => c.status === 'Active').length;
-        const totalPremiums = customers.reduce((sum, c) => sum + (parseFloat(c.premium) || 0), 0);
-        const avgPremium = totalCustomers > 0 ? (totalPremiums / totalCustomers).toFixed(2) : 0;
-        
-        const coverageTypes = {};
-        customers.forEach(c => {
-          if (c.coverage_type) {
-            coverageTypes[c.coverage_type] = (coverageTypes[c.coverage_type] || 0) + 1;
-          }
-        });
-        
-        response = `**AIP BEST RATE - BUSINESS REPORT**\nGenerated: ${new Date().toLocaleDateString()}\n\n**CUSTOMER OVERVIEW:**\n• Total Customers: ${totalCustomers}\n• Active Policies: ${activeCustomers}\n• Total Premium Revenue: $${totalPremiums.toLocaleString()}\n• Average Premium: $${avgPremium}\n\n**COVERAGE BREAKDOWN:**\n${Object.entries(coverageTypes).map(([type, count]) => `• ${type}: ${count} policies`).join('\n')}\n\n**RECOMMENDATIONS:**\n• Review inactive policies for potential reactivation\n• Focus on customer retention programs\n• Consider premium adjustments based on market analysis`;
+        if (!error && allCustomers) {
+          const totalCustomers = allCustomers.length;
+          const activeCustomers = allCustomers.filter(c => c.status === 'Active').length;
+          const totalPremiums = allCustomers.reduce((sum, c) => sum + (parseFloat(c.premium) || 0), 0);
+          
+          const coverageTypes = {};
+          allCustomers.forEach(c => {
+            if (c.coverage_type) {
+              coverageTypes[c.coverage_type] = (coverageTypes[c.coverage_type] || 0) + 1;
+            }
+          });
+          
+          context = `BUSINESS ANALYTICS DATA:
+Total Customers: ${totalCustomers}
+Active Policies: ${activeCustomers}
+Total Premium Revenue: $${totalPremiums.toLocaleString()}
+Average Premium: $${totalCustomers > 0 ? (totalPremiums / totalCustomers).toFixed(2) : 0}
+Coverage Breakdown: ${Object.entries(coverageTypes).map(([type, count]) => `${type}: ${count}`).join(', ')}
+
+`;
+        }
       } catch (dbError) {
-        response = "I'm having trouble generating the report from our database. Please ensure customer data is properly uploaded and try again.";
+        console.error('Database error:', dbError);
       }
     }
     
-    // Default response
-    else {
-      response = `Hello! I'm Clint's AI assistant for AIP Best Rate Insurance. I can help you with:
+    // Call OpenAI with context
+    const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-3.5-turbo',
+        messages: [
+          {
+            role: 'system',
+            content: `You are Clint's professional AI assistant for AIP Best Rate Insurance company. You help with customer management, policy information, form generation, and business operations.
 
-**CUSTOMER MANAGEMENT:**
-• Search customers: "Find customer John Smith"
-• Generate reports: "Generate business report"
-• Create forms: "Generate auto insurance form for Jane Doe"
+${context ? `RELEVANT DATA FROM DATABASE:\n${context}` : ''}
 
-**CURRENT CAPABILITIES:**
-• Real-time customer database search
-• Automated form generation with customer data
-• Business analytics and reporting
-• Policy management assistance
+INSTRUCTIONS:
+- Always be professional and helpful
+- Use the database information provided to give accurate responses
+- For customer searches, present the information clearly
+- For form generation, use customer data when available
+- For reports, use the analytics data provided
+- If no relevant data is found, acknowledge it and offer alternative assistance
+- Keep responses concise but informative`
+          },
+          {
+            role: 'user',
+            content: userMessage
+          }
+        ],
+        max_tokens: 1000,
+        temperature: 0.7
+      })
+    });
 
-What would you like me to help you with today?`;
+    if (!openaiResponse.ok) {
+      throw new Error(`OpenAI API error: ${openaiResponse.status}`);
     }
+
+    const openaiData = await openaiResponse.json();
+    const aiResponse = openaiData.choices[0].message.content;
 
     return res.status(200).json({
       choices: [{
         message: {
-          content: response
+          content: aiResponse
         }
       }]
     });
 
   } catch (error) {
     console.error('API error:', error);
-    return res.status(500).json({ 
-      error: 'Server error',
-      message: error.message
+    
+    // Fallback response if AI fails
+    const fallbackResponse = `I'm having a technical issue right now, but I'm still here to help! 
+
+I can assist you with:
+• Customer searches: "Find customer John Smith"
+• Form generation: "Generate auto insurance form for Jane Doe" 
+• Business reports: "Generate daily business report"
+• Policy management and general insurance questions
+
+Please try your request again, or let me know how else I can help with AIP Best Rate Insurance operations.`;
+
+    return res.status(200).json({
+      choices: [{
+        message: {
+          content: fallbackResponse
+        }
+      }]
     });
   }
 }
